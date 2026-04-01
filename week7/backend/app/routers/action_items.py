@@ -6,7 +6,12 @@ from sqlalchemy.orm import Session
 
 from ..db import get_db
 from ..models import ActionItem
-from ..schemas import ActionItemCreate, ActionItemPatch, ActionItemRead
+from ..schemas import (
+    ActionItemCreate,
+    ActionItemPatch,
+    ActionItemRead,
+    ActionItemsBulkCreateRequest,
+)
 
 router = APIRouter(prefix="/action-items", tags=["action_items"])
 
@@ -68,5 +73,23 @@ def patch_item(item_id: int, payload: ActionItemPatch, db: Session = Depends(get
     db.flush()
     db.refresh(item)
     return ActionItemRead.model_validate(item)
+
+
+@router.post("/bulk-create", response_model=list[ActionItemRead], status_code=201)
+def bulk_create_items(
+    payload: ActionItemsBulkCreateRequest,
+    db: Session = Depends(get_db),
+) -> list[ActionItemRead]:
+    items: list[ActionItem] = []
+    for create_payload in payload.items:
+        item = ActionItem(description=create_payload.description, completed=False)
+        db.add(item)
+        items.append(item)
+
+    db.flush()
+    for item in items:
+        db.refresh(item)
+
+    return [ActionItemRead.model_validate(item) for item in items]
 
 
