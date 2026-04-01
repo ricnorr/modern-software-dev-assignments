@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 
 from ..db import get_db
 from ..models import Note
-from ..schemas import NoteCreate, NotePatch, NoteRead
+from ..schemas import NoteCreate, NotePatch, NoteRead, NoteSearchRequest
 
 router = APIRouter(prefix="/notes", tags=["notes"])
 
@@ -31,6 +31,23 @@ def list_notes(
         stmt = stmt.order_by(desc(Note.created_at))
 
     rows = db.execute(stmt.offset(skip).limit(limit)).scalars().all()
+    return [NoteRead.model_validate(row) for row in rows]
+
+
+@router.post("/search", response_model=list[NoteRead])
+def search_notes(
+    payload: NoteSearchRequest,
+    db: Session = Depends(get_db),
+) -> list[NoteRead]:
+    stmt = select(Note).where(
+        (Note.title.contains(payload.query)) | (Note.content.contains(payload.query))
+    )
+
+    sort_field = payload.sort.lstrip("-")
+    order_fn = desc if payload.sort.startswith("-") else asc
+    stmt = stmt.order_by(order_fn(getattr(Note, sort_field)))
+
+    rows = db.execute(stmt.limit(payload.limit)).scalars().all()
     return [NoteRead.model_validate(row) for row in rows]
 
 
